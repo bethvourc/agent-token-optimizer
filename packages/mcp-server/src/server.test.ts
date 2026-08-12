@@ -11,6 +11,7 @@ import {
   MemoryLogSink,
   SqliteStore,
   createLogger,
+  getWorkspaceIdentity,
 } from "@agent-relay/agent-token-optimization-core";
 
 import { createAgentTokenOptimizerMcpServer } from "./server";
@@ -872,6 +873,80 @@ describe("agent token optimizer MCP server", () => {
       }
     } finally {
       await connection.close();
+    }
+  });
+
+  it("attributes recorded runs to the configured workspace so eviction removes them", async () => {
+    const workspaceRoot = await createTemporaryWorkspace();
+    const cachePath = path.join(workspaceRoot, "runs.sqlite");
+    const connection = await connectTestClient({ workspaceRoot, cachePath });
+
+    try {
+      const result = await connection.client.callTool({
+        name: "record_run",
+        arguments: {
+          cachePath,
+          runId: "run-a",
+          taskId: "task-a",
+          host: "codex",
+          outcome: "succeeded",
+          tokenAccounting: {
+            observed: {
+              source: "provider",
+              breakdown: {
+                agentInputTokens: 900,
+                cachedInputTokens: 100,
+                agentOutputTokens: 200,
+              },
+              totalTokens: 1100,
+            },
+          },
+        },
+      });
+      expect(result.isError).not.toBe(true);
+    } finally {
+      await connection.close();
+    }
+
+    const workspaceHash = (await getWorkspaceIdentity(workspaceRoot)).rootHash;
+    const store = new SqliteStore({ databasePath: cachePath });
+    await store.initialize();
+    try {
+      // Both records the server produced are attributed to its workspace.
+      const metrics = await store.list(STORE_KINDS.runMetric);
+      const ledgers = await store.list(STORE_KINDS.tokenLedger);
+      expect(metrics).toHaveLength(1);
+      expect(ledgers).toHaveLength(1);
+      const ledgerRecord = ledgers[0];
+      if (!ledgerRecord) {
+        throw new Error("expected a persisted token ledger");
+      }
+      expect(metrics[0]?.workspaceRootHash).toBe(workspaceHash);
+      expect(ledgerRecord.workspaceRootHash).toBe(workspaceHash);
+
+      // A different workspace and a genuinely global record are controls.
+      await store.set(STORE_KINDS.tokenLedger, "run-b", ledgerRecord.value, {
+        workspaceRootHash: "workspace-b-hash",
+      });
+      await store.set(STORE_KINDS.tokenEstimate, "estimate-global", {
+        inputTokens: 1,
+        totalTokens: 1,
+        method: "approximate",
+        confidence: "low",
+      });
+
+      const evicted = await store.deleteByWorkspace(workspaceHash);
+      expect(evicted.evictedByKind[STORE_KINDS.runMetric]).toBe(1);
+      expect(evicted.evictedByKind[STORE_KINDS.tokenLedger]).toBe(1);
+
+      // Workspace A's run metric and ledger are gone; controls remain.
+      await expect(store.list(STORE_KINDS.runMetric)).resolves.toEqual([]);
+      await expect(store.list(STORE_KINDS.tokenLedger)).resolves.toEqual([
+        expect.objectContaining({ key: "run-b" }),
+      ]);
+      await expect(store.list(STORE_KINDS.tokenEstimate)).resolves.toHaveLength(1);
+    } finally {
+      await store.close();
     }
   });
 

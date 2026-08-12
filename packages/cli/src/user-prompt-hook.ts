@@ -151,6 +151,7 @@ export async function runUserPromptHook(
         operationId,
         prompt: input.prompt,
         store,
+        workspaceRootHash: workspaceIdentity.rootHash,
       });
 
       return { evidence };
@@ -269,11 +270,18 @@ export async function runUserPromptHook(
     });
 
     if (store) {
-      await store.set(STORE_KINDS.workspaceIndex, cacheKey, workspaceIndex);
+      const workspaceAttribution = { workspaceRootHash: workspaceIdentity.rootHash };
+      await store.set(
+        STORE_KINDS.workspaceIndex,
+        cacheKey,
+        workspaceIndex,
+        workspaceAttribution,
+      );
       await store.set(
         STORE_KINDS.workspaceAnalysis,
         cacheKey,
         createPersistableWorkspaceAnalysis(workspaceAnalysis),
+        workspaceAttribution,
       );
     }
     await persistHookEvidence({
@@ -282,6 +290,7 @@ export async function runUserPromptHook(
       prompt: input.prompt,
       responseTokens,
       store,
+      workspaceRootHash: workspaceIdentity.rootHash,
     });
 
     return {
@@ -422,6 +431,7 @@ async function persistHookEvidence(input: {
   readonly prompt: string;
   readonly responseTokens?: number;
   readonly store: SqliteStore | undefined;
+  readonly workspaceRootHash: string;
 }): Promise<void> {
   if (!input.store) {
     return;
@@ -453,12 +463,19 @@ async function persistHookEvidence(input: {
     ],
   });
 
+  const workspaceAttribution = { workspaceRootHash: input.workspaceRootHash };
   await input.store.set(
     STORE_KINDS.userPromptHookEvidence,
     input.operationId,
     input.evidence,
+    workspaceAttribution,
   );
-  await input.store.set(STORE_KINDS.tokenLedger, tokenLedger.runId, tokenLedger);
+  await input.store.set(
+    STORE_KINDS.tokenLedger,
+    tokenLedger.runId,
+    tokenLedger,
+    workspaceAttribution,
+  );
 }
 
 function assertResponseTokenBudget(value: number): void {

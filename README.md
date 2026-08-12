@@ -78,9 +78,18 @@ Useful lifecycle commands:
 ```sh
 pnpm ato doctor --hosts codex,claude-code,kimi
 pnpm ato cache status
+pnpm ato cache list
+pnpm ato cache evict --workspace /path/to/repo
 pnpm ato cache clear
+pnpm ato cache repair
 pnpm ato uninstall --hosts codex,claude-code,kimi
 ```
+
+`cache list` prints record counts per kind, or record keys for one kind; it never prints
+cached values. `cache evict` removes every record derived from one workspace - including
+its context packs, rankings, summaries, and token ledgers - in a single transaction, and
+leaves records for other workspaces untouched. `cache clear` removes everything, and
+`cache repair` recreates the cache database in place.
 
 Uninstall removes only the managed hook group. Every changed host file is backed up before
 modification.
@@ -108,8 +117,9 @@ pnpm ato doctor --hosts codex,claude-code,kimi
   it.
 
 The default cache is `~/.agent-token-optimizer/cache.sqlite`. Disable persistence for a
-workspace with optional configuration, or clear the cache with `pnpm ato cache clear`. See
-[SECURITY.md](SECURITY.md) for reporting and boundary details.
+workspace with optional configuration, remove one workspace's records with
+`pnpm ato cache evict --workspace <path>`, or clear the cache with `pnpm ato cache clear`.
+See [SECURITY.md](SECURITY.md) for reporting and boundary details.
 
 ## Optional And Maintainer Commands
 

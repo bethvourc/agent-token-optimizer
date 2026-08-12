@@ -11,6 +11,14 @@ All notable user-visible changes are recorded here.
   `KIMI_CODE_HOME` for the config location. The hook accepts content-part prompt arrays,
   and `--host kimi` emits plain-text context because Kimi Code appends hook stdout to the
   turn context.
+- `cache list` and `cache evict --workspace <path>` commands for cache inspection and
+  selective workspace eviction. `cache list` prints record counts and keys only, never
+  cached values. Cache records now carry durable workspace attribution, so `cache evict`
+  removes every record derived from one workspace - context packs, rankings, summaries,
+  token ledgers, and MCP run records included - in one all-or-nothing transaction that
+  restores the live database if persistence fails, while preserving other workspaces.
+  Upgrading an older cache backfills attribution from established keys and invalidates any
+  remaining un-attributable legacy rows so nothing workspace-derived is left undeletable.
 - Deterministic local `UserPromptSubmit` context hook shared by Codex and Claude Code.
 - Local `install`, `doctor`, and `uninstall` lifecycle with dry-run, backups, idempotency,
   drift detection, and preservation of user hooks.

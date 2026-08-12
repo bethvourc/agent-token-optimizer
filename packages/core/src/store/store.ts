@@ -44,13 +44,21 @@ export interface StoreRecord<TValue = unknown> {
   readonly key: string;
   readonly value: TValue;
   readonly contentHash?: string;
+  readonly workspaceRootHash?: string;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
 
 export interface StoreSetOptions {
   readonly contentHash?: string;
+  readonly workspaceRootHash?: string;
   readonly now?: Date;
+}
+
+export interface WorkspaceEvictionResult {
+  readonly workspaceRootHash: string;
+  readonly evicted: number;
+  readonly evictedByKind: Readonly<Partial<Record<StoreRecordKind, number>>>;
 }
 
 export interface StoreHealth {
@@ -79,6 +87,7 @@ export interface AgentTokenStore {
     kind: TKind,
   ) => Promise<StoreRecord<StoreValueByKind[TKind]>[]>;
   delete: (kind: StoreRecordKind, key: string) => Promise<boolean>;
+  deleteByWorkspace: (workspaceRootHash: string) => Promise<WorkspaceEvictionResult>;
   clear: (kind?: StoreRecordKind) => Promise<number>;
 }
 

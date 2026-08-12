@@ -13,6 +13,7 @@ import {
   type StoreRecordKind,
   type StoreSetOptions,
   type StoreValueByKind,
+  type WorkspaceEvictionResult,
 } from "./store";
 
 interface StoreMigration {
@@ -38,11 +39,62 @@ CREATE INDEX IF NOT EXISTS idx_cache_records_kind_updated
   ON cache_records (kind, updated_at);
 `;
 
+const WORKSPACE_ATTRIBUTION_SQL = `
+ALTER TABLE cache_records ADD COLUMN workspace_root_hash TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_cache_records_workspace
+  ON cache_records (workspace_root_hash);
+
+-- Backfill attribution for caches written before this column existed, using the
+-- established deterministic key contracts, so upgraded caches stay evictable by
+-- workspace. workspace_index and workspace_analysis keys are "<rootHash>:latest".
+UPDATE cache_records
+SET workspace_root_hash = substr(key, 1, length(key) - length(':latest'))
+WHERE workspace_root_hash IS NULL
+  AND kind IN ('workspace_index', 'workspace_analysis')
+  AND key LIKE '%:latest';
+
+-- file_summary keys are "summary:<rootHash>:<hash>:<path>".
+UPDATE cache_records
+SET workspace_root_hash = substr(key, 9, instr(substr(key, 9), ':') - 1)
+WHERE workspace_root_hash IS NULL
+  AND kind = 'file_summary'
+  AND key LIKE 'summary:_%:%';
+
+-- context_ranking warm-cache keys are "ranking:<rootHash>:<fingerprint>:<taskHash>".
+UPDATE cache_records
+SET workspace_root_hash = substr(key, 9, instr(substr(key, 9), ':') - 1)
+WHERE workspace_root_hash IS NULL
+  AND kind = 'context_ranking'
+  AND key LIKE 'ranking:_%:%';
+
+-- Remaining legacy rows for workspace-derived kinds carry no attribution in their
+-- key or value contract. Rather than silently retaining undeletable workspace
+-- data, invalidate these disposable cache rows once; they are recomputed on next
+-- use. Genuinely global kinds (for example benchmark_scenario) are left intact.
+DELETE FROM cache_records
+WHERE workspace_root_hash IS NULL
+  AND kind IN (
+    'context_pack',
+    'context_ranking',
+    'file_summary',
+    'user_prompt_hook_evidence',
+    'token_ledger',
+    'token_estimate',
+    'run_metric'
+  );
+`;
+
 const MIGRATIONS: readonly StoreMigration[] = [
   {
     version: 1,
     name: "initial_store",
     sql: INITIAL_SCHEMA_SQL,
+  },
+  {
+    version: 2,
+    name: "workspace_attribution",
+    sql: WORKSPACE_ATTRIBUTION_SQL,
   },
 ];
 
@@ -55,9 +107,16 @@ export interface SqliteStoreOptions {
 export class SqliteStore implements AgentTokenStore {
   readonly #databasePath: string;
   #database: Database | undefined;
+  #sqlJs: SqlJsStatic | undefined;
+  #persistCount = 0;
 
   public constructor(options: SqliteStoreOptions) {
     this.#databasePath = path.resolve(options.databasePath);
+  }
+
+  /** Number of times the database file has been rewritten. Exposed for tests. */
+  public get persistCount(): number {
+    return this.#persistCount;
   }
 
   public async initialize(): Promise<void> {
@@ -66,6 +125,7 @@ export class SqliteStore implements AgentTokenStore {
     }
 
     const SQL = await loadSqlJs();
+    this.#sqlJs = SQL;
     this.#database = await openDatabase(SQL, this.#databasePath);
 
     try {
@@ -129,14 +189,16 @@ export class SqliteStore implements AgentTokenStore {
     const createdAt = existingRecord?.createdAt ?? now;
     const valueJson = JSON.stringify(value);
     const contentHash = options.contentHash ?? hashText(valueJson);
+    const workspaceRootHash = options.workspaceRootHash ?? null;
 
     database.run(
       `
-      INSERT INTO cache_records (kind, key, value_json, content_hash, created_at, updated_at)
-      VALUES ($kind, $key, $valueJson, $contentHash, $createdAt, $updatedAt)
+      INSERT INTO cache_records (kind, key, value_json, content_hash, workspace_root_hash, created_at, updated_at)
+      VALUES ($kind, $key, $valueJson, $contentHash, $workspaceRootHash, $createdAt, $updatedAt)
       ON CONFLICT(kind, key) DO UPDATE SET
         value_json = excluded.value_json,
         content_hash = excluded.content_hash,
+        workspace_root_hash = excluded.workspace_root_hash,
         updated_at = excluded.updated_at
       `,
       {
@@ -144,6 +206,7 @@ export class SqliteStore implements AgentTokenStore {
         $key: key,
         $valueJson: valueJson,
         $contentHash: contentHash,
+        $workspaceRootHash: workspaceRootHash,
         $createdAt: createdAt,
         $updatedAt: now,
       },
@@ -155,6 +218,7 @@ export class SqliteStore implements AgentTokenStore {
       key,
       value,
       contentHash,
+      ...(workspaceRootHash ? { workspaceRootHash } : {}),
       createdAt,
       updatedAt: now,
     };
@@ -166,7 +230,7 @@ export class SqliteStore implements AgentTokenStore {
     const database = this.#requireDatabase();
     const statement = database.prepare(
       `
-      SELECT kind, key, value_json, content_hash, created_at, updated_at
+      SELECT kind, key, value_json, content_hash, workspace_root_hash, created_at, updated_at
       FROM cache_records
       WHERE kind = $kind
       ORDER BY updated_at DESC, key ASC
@@ -202,6 +266,55 @@ export class SqliteStore implements AgentTokenStore {
     await this.#persist();
 
     return true;
+  }
+
+  public async deleteByWorkspace(
+    workspaceRootHash: string,
+  ): Promise<WorkspaceEvictionResult> {
+    const database = this.#requireDatabase();
+    const evictedByKind = this.#countRecordsByKindForWorkspace(workspaceRootHash);
+    const evicted = Object.values(evictedByKind).reduce(
+      (total, count) => total + count,
+      0,
+    );
+
+    if (evicted === 0) {
+      return { workspaceRootHash, evicted: 0, evictedByKind: {} };
+    }
+
+    // Snapshot the pre-eviction image so a failed persist can restore the live
+    // database, keeping memory and disk consistent (all-or-nothing eviction).
+    const snapshot = database.export();
+
+    database.exec("BEGIN TRANSACTION");
+    try {
+      database.run(
+        "DELETE FROM cache_records WHERE workspace_root_hash = $workspaceRootHash",
+        { $workspaceRootHash: workspaceRootHash },
+      );
+      database.exec("COMMIT");
+    } catch (error) {
+      database.exec("ROLLBACK");
+      throw error;
+    }
+
+    try {
+      await this.#persist();
+    } catch (error) {
+      this.#restoreFromSnapshot(snapshot);
+      throw error;
+    }
+
+    return { workspaceRootHash, evicted, evictedByKind };
+  }
+
+  #restoreFromSnapshot(snapshot: Uint8Array): void {
+    if (!this.#sqlJs) {
+      throw new Error("Store has not been initialized.");
+    }
+
+    this.#database?.close();
+    this.#database = new this.#sqlJs.Database(snapshot);
   }
 
   public async clear(kind?: StoreRecordKind): Promise<number> {
@@ -267,7 +380,7 @@ export class SqliteStore implements AgentTokenStore {
     const database = this.#requireDatabase();
     const statement = database.prepare(
       `
-      SELECT kind, key, value_json, content_hash, created_at, updated_at
+      SELECT kind, key, value_json, content_hash, workspace_root_hash, created_at, updated_at
       FROM cache_records
       WHERE kind = $kind AND key = $key
       `,
@@ -300,6 +413,40 @@ export class SqliteStore implements AgentTokenStore {
       .filter((value): value is number => typeof value === "number");
   }
 
+  #countRecordsByKindForWorkspace(
+    workspaceRootHash: string,
+  ): Partial<Record<StoreRecordKind, number>> {
+    const database = this.#requireDatabase();
+    const statement = database.prepare(
+      `
+      SELECT kind, COUNT(*) AS count
+      FROM cache_records
+      WHERE workspace_root_hash = $workspaceRootHash
+      GROUP BY kind
+      ORDER BY kind ASC
+      `,
+      { $workspaceRootHash: workspaceRootHash },
+    );
+
+    try {
+      const counts: Partial<Record<StoreRecordKind, number>> = {};
+
+      while (statement.step()) {
+        const row = statement.getAsObject();
+        const kind = parseStoreRecordKind(row.kind);
+        const count = typeof row.count === "number" ? row.count : 0;
+
+        if (count > 0) {
+          counts[kind] = count;
+        }
+      }
+
+      return counts;
+    } finally {
+      statement.free();
+    }
+  }
+
   #countRecords(kind?: StoreRecordKind): number {
     const database = this.#requireDatabase();
     const statement = kind
@@ -330,6 +477,7 @@ export class SqliteStore implements AgentTokenStore {
     await writeFile(temporaryPath, databaseBytes, { mode: 0o600 });
     await rename(temporaryPath, this.#databasePath);
     await chmod(this.#databasePath, 0o600);
+    this.#persistCount += 1;
   }
 
   #requireDatabase(): Database {
@@ -365,12 +513,15 @@ async function loadSqlJs(): Promise<SqlJsStatic> {
 
 function rowToRecord<TValue>(row: Record<string, unknown>): StoreRecord<TValue> {
   const contentHash = typeof row.content_hash === "string" ? row.content_hash : undefined;
+  const workspaceRootHash =
+    typeof row.workspace_root_hash === "string" ? row.workspace_root_hash : undefined;
 
   return {
     kind: parseStoreRecordKind(row.kind),
     key: parseString(row.key),
     value: JSON.parse(parseString(row.value_json)) as TValue,
     ...(contentHash ? { contentHash } : {}),
+    ...(workspaceRootHash ? { workspaceRootHash } : {}),
     createdAt: parseString(row.created_at),
     updatedAt: parseString(row.updated_at),
   };
