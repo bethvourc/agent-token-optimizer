@@ -18,7 +18,7 @@
     }
   },
   "dependencies": {
-    "sql.js": "^1.13.0",
+    "sql.js": "^1.14.2",
     "typescript": "^6.0.3",
     "zod": "^4.4.3"
   }

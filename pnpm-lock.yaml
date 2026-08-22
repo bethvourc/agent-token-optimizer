@@ -37,8 +37,8 @@ importers:
         specifier: ^3.9.6
         version: 3.9.6
       smol-toml:
-        specifier: ^1.7.1
-        version: 1.7.1
+        specifier: ^1.8.0
+        version: 1.8.0
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -76,8 +76,8 @@ importers:
   packages/core:
     dependencies:
       sql.js:
-        specifier: ^1.13.0
-        version: 1.14.1
+        specifier: ^1.14.2
+        version: 1.14.2
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1346,16 +1346,16 @@ packages:
     resolution: {integrity: sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw==}
     engines: {node: '>=14'}
 
-  smol-toml@1.7.1:
-    resolution: {integrity: sha512-PPlsspAZ4jbMBu5DMFhfUGDQLu/vrL4SyBROVS37x8ynnVmFIs1VPBz1Co8Xks3TvpIaZXmU85y4DrQ+UyVFoQ==}
+  smol-toml@1.8.0:
+    resolution: {integrity: sha512-kCZr2V3ch9i00x8zXRhjUNVcjG9ijES5dDudkXvUVCT5QlJNQWElSJdZqyPemffHoLNUYwOcou0Fy+ojN0uHSQ==}
     engines: {node: '>= 18'}
 
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
     engines: {node: '>=0.10.0'}
 
-  sql.js@1.14.1:
-    resolution: {integrity: sha512-gcj8zBWU5cFsi9WUP+4bFNXAyF1iRpA3LLyS/DP5xlrNzGmPIizUeBggKa8DbDwdqaKwUcTEnChtd2grWo/x/A==}
+  sql.js@1.14.2:
+    resolution: {integrity: sha512-3ZGPovObMFrdw79zrUHbfdE/DLIsy8jdNdssmMSQuRAymedU6q84asPt0kgiqrdMYlPegDItiIMfmIXzZnYFcw==}
 
   stackback@0.0.2:
     resolution: {integrity: sha512-1XMJE5fQo1jGH6Y/7ebnwPOBEkIEnT4QF32d5R1+VXdXveM0IBMJt8zfaxX1P3QhVwrYe+576+jkANtSS2mBbw==}
@@ -2769,11 +2769,11 @@ snapshots:
 
   signal-exit@4.1.0: {}
 
-  smol-toml@1.7.1: {}
+  smol-toml@1.8.0: {}
 
   source-map-js@1.2.1: {}
 
-  sql.js@1.14.1: {}
+  sql.js@1.14.2: {}
 
   stackback@0.0.2: {}
 
