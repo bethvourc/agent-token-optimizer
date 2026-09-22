@@ -24,7 +24,7 @@ describe("workspace SBOM", () => {
     expect(componentVersion(sbom, "@modelcontextprotocol/sdk")).toBe("1.30.0");
     expect(componentVersion(sbom, "@hono/node-server")).toBe("2.0.10");
     expect(componentVersion(sbom, "fast-uri")).toBe("3.1.8");
-    expect(componentVersion(sbom, "hono")).toBe("4.12.34");
+    expect(componentVersion(sbom, "hono")).toBe("4.13.8");
     expect(componentVersion(sbom, "ip-address")).toBe("10.3.1");
   });
 });
