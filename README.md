@@ -1,4 +1,4 @@
-# Agent Token Optimizer
+# Token Optimizer
 
 [![CI](https://github.com/bethvourc/agent-token-optimizer/actions/workflows/ci.yml/badge.svg)](https://github.com/bethvourc/agent-token-optimizer/actions/workflows/ci.yml)
 
