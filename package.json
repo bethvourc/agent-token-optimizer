@@ -21,10 +21,13 @@
     "overrides": {
       "@hono/node-server": "2.0.10",
       "fast-uri": "3.1.8",
-      "hono": "4.13.8",
-      "ip-address": "10.3.1",
+      "hono": "4.13.13",
+      "ip-address": "10.7.4",
       "postcss": "8.5.23",
-      "qs": "6.16.0"
+      "proxy-addr": "2.0.8",
+      "qs": "6.16.0",
+      "source-map-js": "1.2.2",
+      "vite": "7.3.7"
     }
   },
   "scripts": {
@@ -45,16 +48,16 @@
     "clean": "tsc -b --clean"
   },
   "devDependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
     "@eslint/js": "^10.0.1",
-    "@types/node": "^26.6.2",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@types/node": "^26.6.5",
     "@types/sql.js": "^1.4.9",
-    "@vitest/coverage-v8": "^4.1.11",
-    "eslint": "^10.11.0",
-    "prettier": "^3.9.8",
-    "smol-toml": "^1.8.0",
+    "@vitest/coverage-v8": "^4.1.12",
+    "eslint": "^10.12.0",
+    "prettier": "^3.9.10",
+    "smol-toml": "^1.9.1",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.70.0",
-    "vitest": "^4.1.11"
+    "typescript-eslint": "^8.71.2",
+    "vitest": "^4.1.12"
   }
 }
