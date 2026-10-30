@@ -3,7 +3,7 @@
 ## Initial Public Release
 
 - Local-clone build and install workflow
-- Deterministic Codex and Claude Code `UserPromptSubmit` hooks
+- Deterministic Codex, Claude Code, and Kimi Code `UserPromptSubmit` hooks
 - Install, dry-run, doctor, repeat install, uninstall, and rollback behavior
 - Bounded local discovery, ranking, redaction, and owner-only cache persistence
 - Secured non-default MCP surface
