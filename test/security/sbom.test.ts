@@ -21,7 +21,7 @@ describe("workspace SBOM", () => {
       components: Array<{ name: string; version: string }>;
     };
 
-    expect(componentVersion(sbom, "@modelcontextprotocol/sdk")).toBe("1.32.1");
+    expect(componentVersion(sbom, "@modelcontextprotocol/sdk")).toBe("1.32.2");
     expect(componentVersion(sbom, "@hono/node-server")).toBe("2.0.10");
     expect(componentVersion(sbom, "fast-uri")).toBe("3.1.8");
     expect(componentVersion(sbom, "hono")).toBe("4.13.13");
