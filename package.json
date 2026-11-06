@@ -50,10 +50,10 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@modelcontextprotocol/sdk": "^1.32.2",
-    "@types/node": "^26.6.5",
+    "@types/node": "^26.6.6",
     "@types/sql.js": "^1.4.9",
     "@vitest/coverage-v8": "^4.1.12",
-    "eslint": "^10.13.0",
+    "eslint": "^10.14.0",
     "prettier": "^3.9.10",
     "smol-toml": "^1.9.1",
     "typescript": "^6.0.3",
